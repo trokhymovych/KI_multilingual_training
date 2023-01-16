@@ -9,9 +9,11 @@ parser.add_argument('-f1', '--filter_1', help='Filter anon users', required=True
 parser.add_argument('-f2', '--filter_2', help='Filter revision wars', required=True, default=0)
 parser.add_argument('-n', '--max_records', help='Maximum amount of records to collect', required=True, default=300000)
 parser.add_argument('-uc', '--use_cache', help='Use pre-collected cached data', required=True, default=0)
+parser.add_argument('-p', '--prefix', help='Data prefix', required=True, default="mode1")
 
 
 args = vars(parser.parse_args())
+PREFIX = args["prefix"]
 LANG = args["lang"]
 MODE = args["mode"]
 FILTER_ANON = int(args["filter_1"])
@@ -379,7 +381,7 @@ revisions_text_all_sample = revisions_text_all_sample \
         F.col("udf_res.actions")
     )
 # dump data to parquet:
-dump_name = f"{LANG}_anonymous_text_07-2022_{MODE}"
+dump_name = f"{PREFIX}_{LANG}_anonymous_text_07-2022_{MODE}"
 revisions_text_all_sample.write.parquet(dump_name + ".parquet", mode="overwrite")
 
 # dump data to csv:
