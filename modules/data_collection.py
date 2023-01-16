@@ -21,6 +21,8 @@ FILTER_RW = int(args["filter_2"])
 MAX_COUNT = int(args["max_records"])
 USE_CACHE = int(args["use_cache"])
 
+print("Collecting data for ", LANG, " in mode ", MODE)
+
 # Collecting data setup (fixed for now)
 snapshot = "'2022-07'"
 wiki_db = f"'{LANG}wiki'"
