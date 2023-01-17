@@ -135,7 +135,10 @@ test_dfs = []
 filename_pattern = "data/test/{}_anonymous_text_07-2022_test.csv"
 filename_pattern_test = "data/test_full_{}.csv".format("_".join(cc_codes))
 for cc in tqdm(cc_codes):
-    test_dfs.append(pd.read_csv(filename_pattern.format(cc)))
+    test_df = pd.read_csv(filename_pattern.format(cc))
+    test_df = feature_factory.filter(test_df)
+    test_df = feature_factory.balance_key(test_df)
+    test_dfs.append(test_df)
 
 test_df_full = pd.concat(test_dfs)
 
