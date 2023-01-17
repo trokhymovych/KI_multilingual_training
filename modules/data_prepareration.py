@@ -99,9 +99,9 @@ class Preprocessor:
         return data
 
 
-filename_pattern = "data/train/{}_anonymous_text_07-2022.csv"
-filename_pattern_train = "data/train_{}.csv".format("_".join(cc_codes))
-filename_pattern_test = "data/test_{}.csv".format("_".join(cc_codes))
+filename_pattern = "../final_notebooks/data/train/{}_anonymous_text_07-2022.csv"
+filename_pattern_train = "data/anon_train_{}.csv".format("_".join(cc_codes))
+filename_pattern_test = "data/anon_test_{}.csv".format("_".join(cc_codes))
 validation_timestamp_split = "2022-07-01"
 feature_factory = Preprocessor()
 
@@ -132,8 +132,8 @@ test_df.to_csv(filename_pattern_test, index=False)
 
 # collect test dataset:
 test_dfs = []
-filename_pattern = "data/test/{}_anonymous_text_07-2022_test.csv"
-filename_pattern_test = "data/test_full_{}.csv".format("_".join(cc_codes))
+filename_pattern = "../final_notebooks/data/test/{}_anonymous_text_07-2022_test.csv"
+filename_pattern_test = "data/anon_test_full_{}.csv".format("_".join(cc_codes))
 for cc in tqdm(cc_codes):
     test_df = pd.read_csv(filename_pattern.format(cc))
     test_df = feature_factory.filter(test_df)
