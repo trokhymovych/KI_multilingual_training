@@ -234,11 +234,12 @@ class MLMTrainer:
             tokenizer=tokenizer,
             compute_metrics=compute_metrics
         )
-
+        print("RESULTS")
         print(trainer.evaluate())
 
 
-data_path = "../final_notebooks/data/train_ka_lv_ta_ur_eo_lt_sl_hy_hr_sk_eu_et_ms_az_da_bg_sr_ro_el_th_bn_no_hi_ca_hu_ko_fi_vi_uz_sv_cs_he_id_tr_uk_nl_pl_ar_fa_it_zh_ru_es_ja_de_fr_en.csv"
+data_path = "data/anon_train_ka_lv_ta_ur_eo_lt_sl_hy_hr_sk_eu_et_ms_az_da_bg_sr_ro_el_th_bn_no_hi_ca_hu_ko_fi_vi_uz_sv_cs_he_id_tr_uk_nl_pl_ar_fa_it_zh_ru_es_ja_de_fr_en.csv"
+print("Processing path: ", data_path)
 train_df = pd.read_csv(data_path)
 train_df = train_df[train_df["is_text_train"] == 1]
 train_df = train_df
@@ -256,3 +257,4 @@ for mode in ["title", "changes", "inserts", "removes"]:
 
     trainer = MLMTrainer(train_path=prepared_data_path, base_model=MODEL, mode=mode)
     trainer.train_model()
+    print("Model trained")
