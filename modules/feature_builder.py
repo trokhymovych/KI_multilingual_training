@@ -7,6 +7,9 @@ from datasets import load_dataset, load_metric, Dataset, ClassLabel
 from transformers import AutoTokenizer
 from transformers import AutoModelForSequenceClassification, TrainingArguments, Trainer
 
+from datasets import load_metric
+from sklearn.metrics import mean_squared_error
+
 cc_codes = [
     "ka",
     "lv",
@@ -81,7 +84,6 @@ class TextPreparer:
         return f"data/{PREFIX}_titles_semantic.csv"
 
     def build_text_train(self, train_df) -> str:
-        train_df = train_df[train_df["is_text_train"] == 1]
 
         if self.mode == "title":
             return self._build_text_train_title(train_df)
@@ -92,34 +94,46 @@ class TextPreparer:
         lang = []
         target_column = "revision_is_identity_reverted"
 
+        columns_mapping = {"changes": "texts_change", "inserts": "texts_insert", "removes": "texts_removed"}
+
         for rev, text, label, lang_ in tqdm(
-                zip(train_df.revision_id, train_df.texts_change, train_df[target_column], train_df["wiki_db"])):
+                zip(train_df.revision_id, train_df[columns_mapping[self.mode]], train_df[target_column],
+                    train_df["wiki_db"])):
             texts_to_add = ast.literal_eval(text)
             if len(texts_to_add) != 1:
                 continue
             for texts in texts_to_add:
-                if (
-                        ((len(texts) > 0) and self.mode in ["inserts", "removes"]) or
-                        ((texts[0] != texts[1]) and self.mode in ["changes"])
-                ):
+                key = 0
+                if self.mode in ["inserts", "removes"]:
+                    if (len(texts) > 0):
+                        key = 1
+                elif self.mode in ["changes"]:
+                    if texts[0] != texts[1]:
+                        key = 1
+                else:
+                    pass
+                if key == 1:
                     text_changes += [texts]
                     target += [label]
                     revisions += [rev]
                     lang += [lang_]
+        print(len(text_changes), len(target), len(revisions), len(lang))
 
-        columns = ["sentence1", "sentence2"] if self.mode=="changes" else ["sentence1"]
+        print(f"Collected {len(target)} records")
+        columns = ["sentence1", "sentence2"] if self.mode == "changes" else ["sentence1"]
+        print(columns)
         train_2 = pd.DataFrame(text_changes, columns=columns)
         train_2.dropna(inplace=True)
-        train_2.sentence1 = train_2.sentence1.astype(str)
-        train_2 = train_2[~train_2.sentence1.isin(['N/A', 'NA', "n/a", "na", "None", "nan", "N/a"])]
-        if self.mode=="changes":
-            train_2.sentence2 = train_2.sentence2.astype(str)
-            train_2 = train_2[~train_2.sentence2.isin(['N/A', 'NA', "n/a", "na", "None", "nan", "N/a"])]
-
         train_2["label"] = target
         train_2["revision_id"] = revisions
         train_2["lang"] = lang
 
+        train_2.sentence1 = train_2.sentence1.astype(str)
+        train_2 = train_2[~train_2.sentence1.isin(['N/A', 'NA', "n/a", "na", "None", "nan", "N/a"])]
+        if self.mode == "changes":
+            train_2.sentence2 = train_2.sentence2.astype(str)
+            train_2 = train_2[~train_2.sentence2.isin(['N/A', 'NA', "n/a", "na", "None", "nan", "N/a"])]
+        print(train_2)
         # building balanced dataset
         if self.balance:
             part_1 = train_2[train_2.label == 1]
@@ -128,10 +142,10 @@ class TextPreparer:
             part_2 = part_2.sample(np.min([len(part_1), len(part_2)]), random_state=42)
             balanced = pd.concat([part_1, part_2]).sample(len(part_1) + len(part_2), random_state=42)
             balanced.to_csv(f"data/{PREFIX}_text_{self.mode}_train_balanced.csv", index=False)
+            return f"data/{PREFIX}_text_{self.mode}_train_balanced.csv"
         else:
             train_2.to_csv(f"data/{PREFIX}_text_{self.mode}_train_not-balanced.csv", index=False)
-
-        return f"data/{PREFIX}_text_{self.mode}_train_not-balanced.csv"
+            return f"data/{PREFIX}_text_{self.mode}_train_not-balanced.csv"
 
 
 class MLMTrainer:
@@ -141,31 +155,49 @@ class MLMTrainer:
         self.base_model = base_model
 
     def train_model(self):
-        feat_class = ClassLabel(num_classes=2, names=["not_reverted", "reverted"])
-        training_dataset = self.training_dataset.cast_column("label", feat_class)
-        training_dataset = training_dataset.train_test_split(
-            test_size=0.05, stratify_by_column="label", shuffle=True, seed=42
-        )
 
         # tokenization:
         tokenizer = AutoTokenizer.from_pretrained(self.base_model, use_fast=True)
 
-        sentence1_key = "sentence1"
-        sentence2_key = "sentence2"
+        if self.mode != "title":
+            sentence1_key = "sentence1"
+            sentence2_key = "sentence2" if self.mode == "changes" else None
 
-        def preprocess_function(examples):
-            if sentence2_key is None:
-                return tokenizer(examples[sentence1_key], truncation=True)
-            return tokenizer(examples[sentence1_key], examples[sentence2_key], truncation=True, max_length=512)
+            feat_class = ClassLabel(num_classes=2, names=["not_reverted", "reverted"])
+            training_dataset = self.training_dataset.cast_column("label", feat_class)
+            training_dataset = training_dataset.train_test_split(
+                test_size=0.05, stratify_by_column="label", shuffle=True, seed=42
+            )
 
-        encoded_dataset = training_dataset.map(preprocess_function, batched=True)
+            def preprocess_function(examples):
+                if sentence2_key is None:
+                    return tokenizer(examples[sentence1_key], truncation=True)
+                return tokenizer(examples[sentence1_key], examples[sentence2_key], truncation=True, max_length=512)
 
-        num_labels = 2
-        batch_size = 8
-        metric_name = "accuracy"
-        model_name = self.base_model.split("/")[-1]
+            encoded_dataset = training_dataset.map(preprocess_function, batched=True)
 
-        model = AutoModelForSequenceClassification.from_pretrained(self.base_model, num_labels=num_labels)
+            num_labels = 2
+            batch_size = 8
+            metric_name = "accuracy"
+            model_name = self.base_model.split("/")[-1]
+
+            model = AutoModelForSequenceClassification.from_pretrained(self.base_model, num_labels=num_labels)
+        else:
+            # tokenization:
+            sentence1_key = "page_title"
+            sentence2_key = None
+
+            training_dataset = self.training_dataset.train_test_split(test_size=0.05, shuffle=True, seed=42)
+
+            def preprocess_function(examples):
+                return tokenizer(examples[sentence1_key], truncation=True, max_length=512)
+
+            encoded_dataset = training_dataset.map(preprocess_function, batched=True)
+            num_labels = 1
+            metric_name = "rmse"
+            model_name = self.base_model.split("/")[-1]
+            batch_size = 8
+            model = AutoModelForSequenceClassification.from_pretrained(self.base_model, num_labels=num_labels)
 
         args = TrainingArguments(
             f"{self.mode}_{model_name}_balanced",
@@ -181,12 +213,18 @@ class MLMTrainer:
             push_to_hub=False,
         )
 
-        metric = load_metric("glue", "mrpc")
+        if self.mode != "title":
+            metric = load_metric("glue", "mrpc")
 
-        def compute_metrics(eval_pred):
-            predictions, labels = eval_pred
-            predictions = np.argmax(predictions, axis=1)
-            return metric.compute(predictions=predictions, references=labels)
+            def compute_metrics(eval_pred):
+                predictions, labels = eval_pred
+                predictions = np.argmax(predictions, axis=1)
+                return metric.compute(predictions=predictions, references=labels)
+        else:
+            def compute_metrics(eval_pred):
+                predictions, labels = eval_pred
+                rmse = mean_squared_error(labels, predictions, squared=False)
+                return {"rmse": rmse}
 
         trainer = Trainer(
             model,
@@ -197,5 +235,24 @@ class MLMTrainer:
             compute_metrics=compute_metrics
         )
 
-        trainer.evaluate()
+        print(trainer.evaluate())
 
+
+data_path = "../final_notebooks/data/train_ka_lv_ta_ur_eo_lt_sl_hy_hr_sk_eu_et_ms_az_da_bg_sr_ro_el_th_bn_no_hi_ca_hu_ko_fi_vi_uz_sv_cs_he_id_tr_uk_nl_pl_ar_fa_it_zh_ru_es_ja_de_fr_en.csv"
+train_df = pd.read_csv(data_path)
+train_df = train_df[train_df["is_text_train"] == 1]
+train_df = train_df
+print(train_df.columns)
+
+mode = "title"
+PREFIX = "anonymous"
+MODEL = "bert-base-multilingual-cased"
+
+for mode in ["title", "changes", "inserts", "removes"]:
+    print(mode)
+    preparer = TextPreparer(mode)
+    prepared_data_path = preparer.build_text_train(train_df)
+    print("Data prepared")
+
+    trainer = MLMTrainer(train_path=prepared_data_path, base_model=MODEL, mode=mode)
+    trainer.train_model()
