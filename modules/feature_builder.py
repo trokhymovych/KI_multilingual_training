@@ -200,7 +200,7 @@ class MLMTrainer:
             model = AutoModelForSequenceClassification.from_pretrained(self.base_model, num_labels=num_labels)
 
         args = TrainingArguments(
-            f"{self.mode}_{model_name}_balanced",
+            f"models/{self.mode}_{model_name}_balanced",
             evaluation_strategy="epoch",
             save_strategy="epoch",
             learning_rate=2e-5,
