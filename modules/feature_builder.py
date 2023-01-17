@@ -234,6 +234,7 @@ class MLMTrainer:
             tokenizer=tokenizer,
             compute_metrics=compute_metrics
         )
+        trainer.train()
         print("RESULTS")
         print(trainer.evaluate())
 

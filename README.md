@@ -52,8 +52,14 @@ All processed data can be also found here: .... (to be added)......
 #### 3. MLM tuning:
 Having collected training dataset we proceed with fine-tuning of MLMs. 
 ```commandline
-python modules/data_prepareration.py
+python modules/feature_builder.py
 ```
+This script prepares the specific dataset for four different MLMs model tuning.
+Later it uses prepared data and tune MLM for a pair of text classification (changes),
+text classification (inserts, removes) and regression (title semantics).
+
+
+#### 4. Having the tuned data 
 
 
 
