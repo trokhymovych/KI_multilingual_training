@@ -1,14 +1,13 @@
 import pandas as pd
-import numpy as np
 from tqdm import tqdm
 import ast
+import numpy as np
+import torch
+from transformers import AutoTokenizer, BertForSequenceClassification
+from transformers import pipeline
+import gc
 
-from datasets import load_dataset, load_metric, Dataset, ClassLabel
-from transformers import AutoTokenizer
-from transformers import AutoModelForSequenceClassification, TrainingArguments, Trainer
-
-from datasets import load_metric
-from sklearn.metrics import mean_squared_error
+from scipy.special import softmax
 
 cc_codes = [
     "ka",
@@ -63,199 +62,248 @@ cc_codes = [
     "en"
 ]
 
-PREFIX = "anonymous"
-MODEL = "bert-base-multilingual-cased"
+CONTENT_TYPES = [
+    'Argument', 'Category', 'Comment', 'ExternalLink',
+    'Gallery', 'HTMLEntity', 'Heading', 'List', 'Media',
+    'Paragraph', 'Punctuation', 'Reference', 'Section',
+    'Sentence', 'Table', 'Table Element', 'Template',
+    'Text', 'Text Formatting', 'Whitespace', 'Wikilink', 'Word'
+]
+
+ACTION_TYPES = ['change', 'insert', 'move', 'remove']
+
+insert_model = "inserts_bert-base-multilingual-cased_balanced/checkpoint-150170"
+insert_default_values = [-1, -1, -1, -1, -1, -1, -1, -1]
+change_model = "changes_bert-base-multilingual-cased_balanced/checkpoint-312715"
+change_default_values = [-1, -1, -1, -1, -1, -1, -1, -1]
+remove_model = "removes_bert-base-multilingual-cased_balanced/checkpoint-69050"
+remove_default_values = [-1, -1, -1, -1, -1, -1, -1, -1]
+title_model = "title_bert-base-multilingual-cased-balanced/checkpoint-51945"
+title_default_values = [-1, -1]
 
 
-class TextPreparer:
-    def __init__(self, mode="changes", balance=True):
-        self.mode = mode
-        self.balance = balance
+class FeatureExtractor:
 
-    def _build_text_train_title(self, train_df):
-        MIN_REV = 5
-        titles_stats = train_df.groupby("page_title").agg(
-            {"revision_is_identity_reverted": ["mean", "count"], "wiki_db": ["first"]}).reset_index()
-        titles_stats.columns = ["page_title", "label", "rev_count", "wikidb"]
-        titles_stats = titles_stats[titles_stats.rev_count >= MIN_REV]
-        titles_stats.page_title = titles_stats.page_title.apply(lambda x: x.replace("_", " "))
-        titles_stats.to_csv(f"data/{PREFIX}_titles_semantic.csv", index=False)
+    def __init__(
+            self,
+            content_types=CONTENT_TYPES,
+            action_types=ACTION_TYPES,
+            insert_model=insert_model,
+            insert_default_values=insert_default_values,
+            change_model=change_model,
+            change_default_values=change_default_values,
+            title_model=title_model,
+            title_default_values=title_default_values,
+            remove_model=remove_model,
+            remove_default_values=remove_default_values,
+    ):
+        self.content_types = content_types
+        self.action_types = action_types
+        self.insert_model = insert_model
+        self.insert_default_values = insert_default_values
+        self.remove_model = remove_model
+        self.remove_default_values = remove_default_values
+        self.change_model = change_model
+        self.change_default_values = change_default_values
+        self.title_model = title_model
+        self.title_default_values = title_default_values
 
-        return f"data/{PREFIX}_titles_semantic.csv"
+    def get_features(self, df):
+        df = df.reset_index(drop=True)
+        df = self._get_actions_features(df)
+        df = self._get_insert_text_features(df)
+        df = self._get_change_text_features(df)
+        df = self._get_title_semantics(df)
+        df = self._get_remove_text_features(df)
 
-    def build_text_train(self, train_df) -> str:
+        return df
 
-        if self.mode == "title":
-            return self._build_text_train_title(train_df)
+    def _get_actions_features(self, df, actions_column="actions"):
+        features = []
+        feature_names = [f"{t}_{c}" for t in self.content_types for c in self.action_types]
+        for actions in tqdm(df[actions_column]):
+            actions = ast.literal_eval(actions)
+            features_tmp = [actions.get(t, {}).get(c, 0) for t in self.content_types for c in self.action_types]
+            features.append(features_tmp)
+        features_df = pd.DataFrame(features, columns=feature_names)
+        for c in feature_names:
+            df[c] = features_df[c].values
+        return df
 
-        text_changes = []
-        target = []
-        revisions = []
-        lang = []
-        target_column = "revision_is_identity_reverted"
+    def _get_insert_text_features(self, df):
+        print("Processing inserts....")
+        print("Preparing texts: ")
+        texts_to_process = self._get_text_to_process(df, "texts_insert")
+        print("Preparing features: ")
+        texts_mapping = self._get_text_features(texts_to_process, model_type="insert")
+        print("Mapping features: ")
+        text_features = []
+        for texts_raw in tqdm(df.texts_insert):
+            texts = ast.literal_eval(texts_raw)
+            features_local = [texts_mapping.get(text) for text in texts if not texts_mapping.get(text) is None]
+            if len(features_local) == 0:
+                text_features.append(self.insert_default_values)
+            else:
+                text_features.append(np.hstack([np.max(features_local, axis=0), np.mean(features_local, axis=0)]))
 
-        columns_mapping = {"changes": "texts_change", "inserts": "texts_insert", "removes": "texts_removed"}
+        text_features = np.array(text_features)
+        p_columns = [f"insert_{c}" for c in
+                     ["s_0_max", "s_1_max", "p_0_max", "p_1_max", "s_0_mean", "s_1_mean", "p_0_mean", "p_1_mean"]]
+        for i, c in enumerate(p_columns):
+            df[c] = text_features[:, i]
+        return df
 
-        for rev, text, label, lang_ in tqdm(
-                zip(train_df.revision_id, train_df[columns_mapping[self.mode]], train_df[target_column],
-                    train_df["wiki_db"])):
-            texts_to_add = ast.literal_eval(text)
-            if len(texts_to_add) != 1:
-                continue
-            for texts in texts_to_add:
-                key = 0
-                if self.mode in ["inserts", "removes"]:
-                    if (len(texts) > 0):
-                        key = 1
-                elif self.mode in ["changes"]:
-                    if texts[0] != texts[1]:
-                        key = 1
+    def _get_change_text_features(self, df):
+        print("Processing changes....")
+        print("Preparing texts: ")
+        texts_to_process = self._get_text_to_process(df, "texts_change")
+        print("Preparing features: ")
+        texts_mapping = self._get_text_features(texts_to_process, model_type="change")
+        print("Mapping features: ")
+        text_features = []
+        for texts_raw in tqdm(df.texts_change):
+            texts = ast.literal_eval(texts_raw)
+            features_local = [texts_mapping.get(str({"text": text[0], "text_pair": text[1]})) for text in texts
+                              if not texts_mapping.get(str({"text": text[0], "text_pair": text[1]})) is None]
+            if len(features_local) == 0:
+                text_features.append(self.change_default_values)
+            else:
+                text_features.append(np.hstack([np.max(features_local, axis=0), np.mean(features_local, axis=0)]))
+
+        text_features = np.array(text_features)
+        p_columns = [f"change_{c}" for c in
+                     ["s_0_max", "s_1_max", "p_0_max", "p_1_max", "s_0_mean", "s_1_mean", "p_0_mean", "p_1_mean"]]
+        for i, c in enumerate(p_columns):
+            df[c] = text_features[:, i]
+        return df
+
+    def _get_title_semantics(self, df):
+        print("Processing title....")
+        print("Preparing texts: ")
+        texts_to_process = self._get_text_to_process(df, "page_title")
+        print("Preparing features: ")
+        texts_mapping = self._get_text_features(texts_to_process, model_type="title")
+        print("Mapping features: ")
+        text_features = []
+        for texts_raw in tqdm(df.page_title):
+            features_local = texts_mapping.get(texts_raw)
+            if features_local is None:
+                text_features.append(self.title_default_values)
+            else:
+                text_features.append(features_local)
+
+        text_features = np.array(text_features)
+        p_columns = [f"title_{c}" for c in ["s_0", "p_0"]]
+        for i, c in enumerate(p_columns):
+            df[c] = text_features[:, i]
+        return df
+
+    def _get_remove_text_features(self, df):
+        print("Processing removes....")
+        print("Preparing texts: ")
+        texts_to_process = self._get_text_to_process(df, "texts_removed")
+        print("Preparing features: ")
+        texts_mapping = self._get_text_features(texts_to_process, model_type="remove")
+        print("Mapping features: ")
+        text_features = []
+        for texts_raw in tqdm(df.texts_removed):
+            texts = ast.literal_eval(texts_raw)
+            features_local = [texts_mapping.get(text) for text in texts if not texts_mapping.get(text) is None]
+            if len(features_local) == 0:
+                text_features.append(self.remove_default_values)
+            else:
+                text_features.append(np.hstack([np.max(features_local, axis=0), np.mean(features_local, axis=0)]))
+
+        text_features = np.array(text_features)
+        p_columns = [f"remove_{c}" for c in
+                     ["s_0_max", "s_1_max", "p_0_max", "p_1_max", "s_0_mean", "s_1_mean", "p_0_mean", "p_1_mean"]]
+        for i, c in enumerate(p_columns):
+            df[c] = text_features[:, i]
+        return df
+
+    def _preds_processing(self, preds):
+        res = []
+        for i in preds:
+            res.append(i['score'])
+        return np.hstack([res, softmax(res)])
+
+    def _get_text_to_process(self, df, field_name):
+        texts_to_process = []
+        if field_name in ["page_title", "event_comment"]:
+            return list(df[field_name].dropna().unique())
+        else:
+            for texts_raw in df[field_name].unique():
+                texts = ast.literal_eval(texts_raw)
+                if (field_name == "texts_insert" or field_name == "texts_removed") and len(texts) > 0:
+                    texts_to_process += [text for text in texts if len(text) > 0]
+                elif field_name == "texts_change" and len(texts) > 0:
+                    texts_to_process += [{"text": text[0], "text_pair": text[1]} for text in texts if
+                                         text[0] != text[1]]
                 else:
                     pass
-                if key == 1:
-                    text_changes += [texts]
-                    target += [label]
-                    revisions += [rev]
-                    lang += [lang_]
-        print(len(text_changes), len(target), len(revisions), len(lang))
+            return texts_to_process
 
-        print(f"Collected {len(target)} records")
-        columns = ["sentence1", "sentence2"] if self.mode == "changes" else ["sentence1"]
-        print(columns)
-        train_2 = pd.DataFrame(text_changes, columns=columns)
-        train_2.dropna(inplace=True)
-        train_2["label"] = target
-        train_2["revision_id"] = revisions
-        train_2["lang"] = lang
+    def _get_text_features(self, texts, model_type="insert"):
 
-        train_2.sentence1 = train_2.sentence1.astype(str)
-        train_2 = train_2[~train_2.sentence1.isin(['N/A', 'NA', "n/a", "na", "None", "nan", "N/a"])]
-        if self.mode == "changes":
-            train_2.sentence2 = train_2.sentence2.astype(str)
-            train_2 = train_2[~train_2.sentence2.isin(['N/A', 'NA', "n/a", "na", "None", "nan", "N/a"])]
-        print(train_2)
-        # building balanced dataset
-        if self.balance:
-            part_1 = train_2[train_2.label == 1]
-            part_2 = train_2[train_2.label == 0]
+        print("Loading models: ")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        tqdm_batch_size = 1000
+        print(f"Selected {device}")
 
-            part_2 = part_2.sample(np.min([len(part_1), len(part_2)]), random_state=42)
-            balanced = pd.concat([part_1, part_2]).sample(len(part_1) + len(part_2), random_state=42)
-            balanced.to_csv(f"data/{PREFIX}_text_{self.mode}_train_balanced.csv", index=False)
-            return f"data/{PREFIX}_text_{self.mode}_train_balanced.csv"
+        if model_type == "insert":
+            tokenizer = AutoTokenizer.from_pretrained(self.insert_model, truncation=True, max_length=512, device=device)
+            model = BertForSequenceClassification.from_pretrained(self.insert_model).to(device)
+        elif model_type == "remove":
+            tokenizer = AutoTokenizer.from_pretrained(self.remove_model, truncation=True, max_length=512, device=device)
+            model = BertForSequenceClassification.from_pretrained(self.remove_model).to(device)
+        elif model_type == "change":
+            tokenizer = AutoTokenizer.from_pretrained(self.change_model, truncation=True, max_length=512, device=device)
+            model = BertForSequenceClassification.from_pretrained(self.change_model).to(device)
+        elif model_type == "title":
+            tokenizer = AutoTokenizer.from_pretrained(self.title_model, truncation=True, max_length=512, device=device)
+            model = BertForSequenceClassification.from_pretrained(self.title_model).to(device)
         else:
-            train_2.to_csv(f"data/{PREFIX}_text_{self.mode}_train_not-balanced.csv", index=False)
-            return f"data/{PREFIX}_text_{self.mode}_train_not-balanced.csv"
+            raise NotImplementedError
+
+        clf = pipeline(task="text-classification", model=model, tokenizer=tokenizer, device=0, batch_size=124)
+
+        print(f"Predicting {len(texts)} texts: ")
+        tokenizer_kwargs = {'truncation': True, 'max_length': 512}
+
+        preds = []
+        for i in tqdm(range(0, len(texts), tqdm_batch_size)):
+            preds += clf(texts[i:i + tqdm_batch_size], return_all_scores=True, function_to_apply="none",
+                         **tokenizer_kwargs, batch_size=64)
+
+        del tokenizer, model
+        gc.collect()
+        torch.cuda.empty_cache()
+
+        print("Postprocessing: ")
+        parser_preds = [self._preds_processing(p) for p in preds]
+        preds_dict = {str(k): v for k, v in zip(texts, parser_preds)}
+
+        return preds_dict
 
 
-class MLMTrainer:
-    def __init__(self, train_path, base_model, mode):
-        self.training_dataset = Dataset.from_csv(train_path)
-        self.mode = mode
-        self.base_model = base_model
+filename_pattern_train_input = "data/anon_train_{}.csv".format("_".join(cc_codes))
+filename_pattern_test_input = "data/anon_test_{}.csv".format("_".join(cc_codes))
+filename_pattern_test_full_input = "data/anon_test_full_{}.csv".format("_".join(cc_codes))
 
-    def train_model(self):
+filename_pattern_train = "data/processed_anon_train_{}.csv".format("_".join(cc_codes))
+filename_pattern_test = "data/processed_anon_test_{}.csv".format("_".join(cc_codes))
+filename_pattern_test_full = "data/processed_anon_test_full_{}.csv".format("_".join(cc_codes))
 
-        # tokenization:
-        tokenizer = AutoTokenizer.from_pretrained(self.base_model, use_fast=True)
+feature_extractor = FeatureExtractor()
 
-        if self.mode != "title":
-            sentence1_key = "sentence1"
-            sentence2_key = "sentence2" if self.mode == "changes" else None
+train_df = pd.read_csv(filename_pattern_train_input)
+train_df = feature_extractor.get_features(train_df)
+train_df.to_csv(filename_pattern_train, index=False)
 
-            feat_class = ClassLabel(num_classes=2, names=["not_reverted", "reverted"])
-            training_dataset = self.training_dataset.cast_column("label", feat_class)
-            training_dataset = training_dataset.train_test_split(
-                test_size=0.05, stratify_by_column="label", shuffle=True, seed=42
-            )
+test_df = pd.read_csv(filename_pattern_test_input)
+test_df = feature_extractor.get_features(test_df)
+test_df.to_csv(filename_pattern_test, index=False)
 
-            def preprocess_function(examples):
-                if sentence2_key is None:
-                    return tokenizer(examples[sentence1_key], truncation=True)
-                return tokenizer(examples[sentence1_key], examples[sentence2_key], truncation=True, max_length=512)
-
-            encoded_dataset = training_dataset.map(preprocess_function, batched=True)
-
-            num_labels = 2
-            batch_size = 8
-            metric_name = "accuracy"
-            model_name = self.base_model.split("/")[-1]
-
-            model = AutoModelForSequenceClassification.from_pretrained(self.base_model, num_labels=num_labels)
-        else:
-            # tokenization:
-            sentence1_key = "page_title"
-            sentence2_key = None
-
-            training_dataset = self.training_dataset.train_test_split(test_size=0.05, shuffle=True, seed=42)
-
-            def preprocess_function(examples):
-                return tokenizer(examples[sentence1_key], truncation=True, max_length=512)
-
-            encoded_dataset = training_dataset.map(preprocess_function, batched=True)
-            num_labels = 1
-            metric_name = "rmse"
-            model_name = self.base_model.split("/")[-1]
-            batch_size = 8
-            model = AutoModelForSequenceClassification.from_pretrained(self.base_model, num_labels=num_labels)
-
-        args = TrainingArguments(
-            f"models/{self.mode}_{model_name}_balanced",
-            evaluation_strategy="epoch",
-            save_strategy="epoch",
-            learning_rate=2e-5,
-            per_device_train_batch_size=batch_size,
-            per_device_eval_batch_size=batch_size,
-            num_train_epochs=5,
-            weight_decay=0.01,
-            load_best_model_at_end=True,
-            metric_for_best_model=metric_name,
-            push_to_hub=False,
-        )
-
-        if self.mode != "title":
-            metric = load_metric("glue", "mrpc")
-
-            def compute_metrics(eval_pred):
-                predictions, labels = eval_pred
-                predictions = np.argmax(predictions, axis=1)
-                return metric.compute(predictions=predictions, references=labels)
-        else:
-            def compute_metrics(eval_pred):
-                predictions, labels = eval_pred
-                rmse = mean_squared_error(labels, predictions, squared=False)
-                return {"rmse": rmse}
-
-        trainer = Trainer(
-            model,
-            args,
-            train_dataset=encoded_dataset["train"],
-            eval_dataset=encoded_dataset["test"],
-            tokenizer=tokenizer,
-            compute_metrics=compute_metrics
-        )
-        trainer.train()
-        print("RESULTS")
-        print(trainer.evaluate())
-
-
-data_path = "data/anon_train_ka_lv_ta_ur_eo_lt_sl_hy_hr_sk_eu_et_ms_az_da_bg_sr_ro_el_th_bn_no_hi_ca_hu_ko_fi_vi_uz_sv_cs_he_id_tr_uk_nl_pl_ar_fa_it_zh_ru_es_ja_de_fr_en.csv"
-print("Processing path: ", data_path)
-train_df = pd.read_csv(data_path)
-train_df = train_df[train_df["is_text_train"] == 1]
-train_df = train_df
-print(train_df.columns)
-
-mode = "title"
-PREFIX = "anonymous"
-MODEL = "bert-base-multilingual-cased"
-
-for mode in ["title", "changes", "inserts", "removes"]:
-    print(mode)
-    preparer = TextPreparer(mode)
-    prepared_data_path = preparer.build_text_train(train_df)
-    print("Data prepared")
-
-    trainer = MLMTrainer(train_path=prepared_data_path, base_model=MODEL, mode=mode)
-    trainer.train_model()
-    print("Model trained")
+test_df_full = pd.read_csv(filename_pattern_test_full_input)
+test_df_full = feature_extractor.get_features(test_df_full)
+test_df_full.to_csv(filename_pattern_test_full, index=False)
