@@ -132,4 +132,5 @@ dmypy.json
 .idea/
 .DS_Store
 data/
+data2/
 models/
