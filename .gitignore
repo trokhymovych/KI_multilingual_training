@@ -134,3 +134,4 @@ dmypy.json
 data/
 data2/
 models/
+/data2
