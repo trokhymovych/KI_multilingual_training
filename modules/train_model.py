@@ -1,29 +1,20 @@
 import pandas as pd
-import numpy as np
-from tqdm import tqdm
-import requests
-import ast
-import geoip2.database
-
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import plot_confusion_matrix
 from catboost import CatBoostClassifier, Pool
 from sklearn.utils.class_weight import compute_class_weight
 import numpy as np
-import torch
-from transformers import AutoTokenizer, BertForSequenceClassification
-from transformers import pipeline
-import gc
 
-from scipy.special import softmax
+MODEL_NAME = "classifier_ml_anon"
 
 # loading data
 filename_pattern_train = "data/processed_train_ka_lv_ta_ur_eo_lt_sl_hy_hr_sk_eu_et_ms_az_da_bg_sr_ro_el_th_bn_no_hi_ca_hu_ko_fi_vi_uz_sv_cs_he_id_tr_uk_nl_pl_ar_fa_it_zh_ru_es_ja_de_fr_en.csv"
 filename_pattern_test = "data/processed_test_ka_lv_ta_ur_eo_lt_sl_hy_hr_sk_eu_et_ms_az_da_bg_sr_ro_el_th_bn_no_hi_ca_hu_ko_fi_vi_uz_sv_cs_he_id_tr_uk_nl_pl_ar_fa_it_zh_ru_es_ja_de_fr_en.csv"
+filename_pattern_test_full = "data/processed_test_ka_lv_ta_ur_eo_lt_sl_hy_hr_sk_eu_et_ms_az_da_bg_sr_ro_el_th_bn_no_hi_ca_hu_ko_fi_vi_uz_sv_cs_he_id_tr_uk_nl_pl_ar_fa_it_zh_ru_es_ja_de_fr_en.csv"
+
 train_df = pd.read_csv(filename_pattern_train)
 test_df = pd.read_csv(filename_pattern_test)
+test_full_df = pd.read_csv(filename_pattern_test_full)
+
 train_df = train_df[train_df["is_text_train"] == 0]
 
 # feature renaming
@@ -49,7 +40,8 @@ old_insert = [f"title_s_0"]
 new_insert = ["bert_title_score"]
 features_renaming.update({k:v for k,v in zip(old_insert, new_insert)})
 
-feat = ['Argument_change', 'Argument_insert', 'Argument_move', 'Argument_remove', 'Category_change',
+feat = [
+    'Argument_change', 'Argument_insert', 'Argument_move', 'Argument_remove', 'Category_change',
     'Category_insert', 'Category_move', 'Category_remove', 'Comment_change', 'Comment_insert',
     'Comment_move', 'Comment_remove', 'ExternalLink_change', 'ExternalLink_insert', 'ExternalLink_move',
     'ExternalLink_remove', 'Gallery_change', 'Gallery_insert', 'Gallery_move', 'Gallery_remove', 'HTMLEntity_change',
@@ -64,7 +56,8 @@ feat = ['Argument_change', 'Argument_insert', 'Argument_move', 'Argument_remove'
     'Text_insert', 'Text_move', 'Text_remove', 'Text Formatting_change', 'Text Formatting_insert', 'Text Formatting_move',
     'Text Formatting_remove', 'Whitespace_change', 'Whitespace_insert', 'Whitespace_move', 'Whitespace_remove',
     'Wikilink_change', 'Wikilink_insert', 'Wikilink_move', 'Wikilink_remove', 'Word_change', 'Word_insert',
-    'Word_move', 'Word_remove']
+    'Word_move', 'Word_remove'
+]
 
 features_renaming.update({old: "_".join([old.split("_")[1], old.split("_")[0]]) for old in feat})
 
@@ -72,8 +65,11 @@ new_columns = [features_renaming.get(x, x) for x in train_df.columns]
 train_df.columns = new_columns
 new_columns = [features_renaming.get(x, x) for x in test_df.columns]
 test_df.columns = new_columns
+new_columns = [features_renaming.get(x, x) for x in test_full_df.columns]
+test_full_df.columns = new_columns
 
-feat = ['Argument_change', 'Argument_insert', 'Argument_move', 'Argument_remove', 'Category_change',
+feat = [
+    'Argument_change', 'Argument_insert', 'Argument_move', 'Argument_remove', 'Category_change',
     'Category_insert', 'Category_move', 'Category_remove', 'Comment_change', 'Comment_insert',
     'Comment_move', 'Comment_remove', 'ExternalLink_change', 'ExternalLink_insert', 'ExternalLink_move',
     'ExternalLink_remove', 'Gallery_change', 'Gallery_insert', 'Gallery_move', 'Gallery_remove', 'HTMLEntity_change',
@@ -88,7 +84,8 @@ feat = ['Argument_change', 'Argument_insert', 'Argument_move', 'Argument_remove'
     'Text_insert', 'Text_move', 'Text_remove', 'Text Formatting_change', 'Text Formatting_insert', 'Text Formatting_move',
     'Text Formatting_remove', 'Whitespace_change', 'Whitespace_insert', 'Whitespace_move', 'Whitespace_remove',
     'Wikilink_change', 'Wikilink_insert', 'Wikilink_move', 'Wikilink_remove', 'Word_change', 'Word_insert',
-    'Word_move', 'Word_remove']
+    'Word_move', 'Word_remove'
+]
 features_actions = ["_".join([old.split("_")[1], old.split("_")[0]]) for old in feat]
 
 features_list = [
@@ -121,12 +118,9 @@ X_train, X_test, y_train, y_test = train_test_split(train_df[features].fillna(-1
 
 cat_features = [
     'wiki_db',
-    # 'page_title',
     'is_mobile_edit', 'is_mobile_web_edit',
     'is_visualeditor', 'is_wikieditor',
     'is_ios_app_edit',
-    # 'page_region', 'country_iso_code',
-    # 'region_iso_code', 'city'
 ]
 
 train_data = Pool(
@@ -158,9 +152,10 @@ model = CatBoostClassifier(iterations=5000, metric_period=100, verbose=True, lea
 model.fit(train_data, eval_set=test_data, plot=False)
 
 print(model.best_score_)
-print(pd.DataFrame({'feature_importance': model.get_feature_importance(train_data),
-              'feature_names': X_test.columns}).sort_values(by=['feature_importance'],
-                                                           ascending=False).head(30))
+print(pd.DataFrame({
+    'feature_importance': model.get_feature_importance(train_data),
+    'feature_names': X_test.columns}
+).sort_values(by=['feature_importance'], ascending=False).head(30))
 
 
 hold_out_data = Pool(
@@ -177,8 +172,23 @@ hold_out_data = Pool(
     label=test_df[test_df.is_balanced == 1][target_column],
     cat_features=cat_features
 )
-res = model.eval_metrics(hold_out_data, metrics=['Logloss', 'AUC', 'Precision', 'Recall', 'F1', 'Accuracy'], eval_period=1000)
+res = model.eval_metrics(
+    hold_out_data,
+    metrics=['Logloss', 'AUC', 'Precision', 'Recall', 'F1', 'Accuracy'],
+    eval_period=1000
+)
 metrics_holdout = {c: res[c][-1] for c in ['Logloss', 'AUC', 'Precision', 'Recall', 'F1', 'Accuracy']}
 print("Balanced hold-out metrics: ", metrics_holdout)
 
-model.save_model('classifier_ml_anon')
+model.save_model(MODEL_NAME)
+
+
+# Make final prediction file
+model = CatBoostClassifier().load_model(MODEL_NAME)
+hold_out_data = Pool(
+    data=test_full_df[features].fillna(-1),
+    label=test_full_df[target_column],
+    cat_features=cat_features
+)
+test_full_df["predict_score"] = model.predict_proba(hold_out_data)[:, 1]
+test_full_df[["revision_id", "predict_score"]].to_csv(f"{MODEL_NAME}_scores.csv", index=False)
