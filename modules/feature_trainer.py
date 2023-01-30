@@ -11,60 +11,14 @@ from datasets import load_metric
 from sklearn.metrics import mean_squared_error
 
 cc_codes = [
-    "ka",
-    "lv",
-    "ta",
-    # "kk",
-    "ur",
-    "eo",
-    "lt",
-    "sl",
-    "hy",
-    "hr",
-    "sk",
-    "eu",
-    "et",
-    "ms",
-    "az",
-    "da",
-    "bg",
-    "sr",
-    "ro",
-    "el",
-    "th",
-    "bn",
-    # "simple",
-    "no",
-    "hi",
-    "ca",
-    "hu",
-    "ko",
-    "fi",
-    "vi",
-    "uz",
-    "sv",
-    "cs",
-    "he",
-    "id",
-    "tr",
-    "uk",
-    "nl",
-    "pl",
-    "ar",
-    "fa",
-    "it",
-    "zh",
-    # "pt",
-    "ru",
-    "es",
-    "ja",
-    "de",
-    "fr",
-    "en"
+    "ka", "lv", "ta", "ur", "eo", "lt", "sl", "hy", "hr", "sk", "eu", "et", "ms", "az", "da", "bg",
+    "sr", "ro", "el", "th", "bn", "no", "hi", "ca", "hu", "ko", "fi", "vi", "uz", "sv", "cs", "he",
+    "id", "tr", "uk", "nl", "pl", "ar", "fa", "it", "zh", "ru", "es", "ja", "de", "fr", "en"
 ]
 
 PREFIX = "all_users"
 MODEL = "bert-base-multilingual-cased"
+data_path = "data/all_users_train_{}.csv".format("_".join(cc_codes))
 
 
 class TextPreparer:
@@ -129,11 +83,10 @@ class TextPreparer:
         train_2["lang"] = lang
 
         train_2.sentence1 = train_2.sentence1.astype(str)
-        train_2 = train_2[~train_2.sentence1.isin(['N/A', 'NA', "n/a", "na", "None", "nan", "N/a"])]
+        train_2 = train_2[~train_2.sentence1.apply(str).isin(['N/A', 'NA', "n/a", "na", "None", "nan", "N/a"])]
         if self.mode == "changes":
             train_2.sentence2 = train_2.sentence2.astype(str)
-            train_2 = train_2[~train_2.sentence2.isin(['N/A', 'NA', "n/a", "na", "None", "nan", "N/a"])]
-        print(train_2)
+            train_2 = train_2[~train_2.sentence2.apply(str).isin(['N/A', 'NA', "n/a", "na", "None", "nan", "N/a"])]
         # building balanced dataset
         if self.balance:
             part_1 = train_2[train_2.label == 1]
@@ -142,6 +95,7 @@ class TextPreparer:
             part_2 = part_2.sample(np.min([len(part_1), len(part_2)]), random_state=42)
             balanced = pd.concat([part_1, part_2]).sample(len(part_1) + len(part_2), random_state=42)
             balanced.to_csv(f"data/{PREFIX}_text_{self.mode}_train_balanced.csv", index=False)
+            print(len(balanced))
             return f"data/{PREFIX}_text_{self.mode}_train_balanced.csv"
         else:
             train_2.to_csv(f"data/{PREFIX}_text_{self.mode}_train_not-balanced.csv", index=False)
@@ -239,14 +193,13 @@ class MLMTrainer:
         print(trainer.evaluate())
 
 
-data_path = "data/all_users_train_ka_lv_ta_ur_eo_lt_sl_hy_hr_sk_eu_et_ms_az_da_bg_sr_ro_el_th_bn_no_hi_ca_hu_ko_fi_vi_uz_sv_cs_he_id_tr_uk_nl_pl_ar_fa_it_zh_ru_es_ja_de_fr_en.csv"
 print("Processing path: ", data_path)
-train_df = pd.read_csv(data_path, nrows=10000)
+train_df = pd.read_csv(data_path)
 train_df = train_df[train_df["is_text_train"] == 1]
 train_df = train_df
 print(train_df.columns)
 
-for mode in ["title", "changes", "inserts", "removes"]:
+for mode in ["inserts", "changes", "removes", "title"]:
     print(mode)
     preparer = TextPreparer(mode)
     prepared_data_path = preparer.build_text_train(train_df)

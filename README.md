@@ -52,14 +52,23 @@ All processed data can be also found here: .... (to be added)......
 #### 3. MLM tuning:
 Having collected training dataset we proceed with fine-tuning of MLMs. 
 ```commandline
-python modules/feature_builder.py
+python modules/feature_trainer.py
 ```
+
 This script prepares the specific dataset for four different MLMs model tuning.
 Later it uses prepared data and tune MLM for a pair of text classification (changes),
-text classification (inserts, removes) and regression (title semantics).
+text classification (inserts, removes) and regression (title semantics). And later tune those 
+models and save them to the \models directory.
+GPU is needed for training. We used AMD Radeon Pro WX 9100 16GB GPU.
 
 
-#### 4. Having the tuned data 
+#### 4. MLM features calculation for datasets
+Having collected training dataset and tuned MLMs we proceed with calculation text features for 
+those datasets (training and testing parts)
+```commandline
+python modules/feature_builder.py
+```
+Before running the script we should make sure that paths to MLMs and datasets are correct in the script
 
 
 
