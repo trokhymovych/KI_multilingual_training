@@ -10,56 +10,9 @@ import gc
 from scipy.special import softmax
 
 cc_codes = [
-    "ka",
-    "lv",
-    "ta",
-    # "kk",
-    "ur",
-    "eo",
-    "lt",
-    "sl",
-    "hy",
-    "hr",
-    "sk",
-    "eu",
-    "et",
-    "ms",
-    "az",
-    "da",
-    "bg",
-    "sr",
-    "ro",
-    "el",
-    "th",
-    "bn",
-    # "simple",
-    "no",
-    "hi",
-    "ca",
-    "hu",
-    "ko",
-    "fi",
-    "vi",
-    "uz",
-    "sv",
-    "cs",
-    "he",
-    "id",
-    "tr",
-    "uk",
-    "nl",
-    "pl",
-    "ar",
-    "fa",
-    "it",
-    "zh",
-    # "pt",
-    "ru",
-    "es",
-    "ja",
-    "de",
-    "fr",
-    "en"
+    "ka", "lv", "ta", "ur", "eo", "lt", "sl", "hy", "hr", "sk", "eu", "et", "ms", "az", "da", "bg",
+    "sr", "ro", "el", "th", "bn", "no", "hi", "ca", "hu", "ko", "fi", "vi", "uz", "sv", "cs", "he",
+    "id", "tr", "uk", "nl", "pl", "ar", "fa", "it", "zh", "ru", "es", "ja", "de", "fr", "en"
 ]
 
 CONTENT_TYPES = [
@@ -72,30 +25,39 @@ CONTENT_TYPES = [
 
 ACTION_TYPES = ['change', 'insert', 'move', 'remove']
 
-insert_model = "inserts_bert-base-multilingual-cased_balanced/checkpoint-150170"
+# here should be path to models trained in feature_trainer.py
+insert_model = "models/inserts_bert-base-multilingual-cased_balanced/checkpoint-81215"
 insert_default_values = [-1, -1, -1, -1, -1, -1, -1, -1]
-change_model = "changes_bert-base-multilingual-cased_balanced/checkpoint-312715"
+change_model = "models/changes_bert-base-multilingual-cased_balanced/checkpoint-164080"
 change_default_values = [-1, -1, -1, -1, -1, -1, -1, -1]
-remove_model = "removes_bert-base-multilingual-cased_balanced/checkpoint-69050"
+remove_model = "models/removes_bert-base-multilingual-cased_balanced/checkpoint-38835"
 remove_default_values = [-1, -1, -1, -1, -1, -1, -1, -1]
-title_model = "title_bert-base-multilingual-cased-balanced/checkpoint-51945"
+title_model = "models/title_bert-base-multilingual-cased_balanced/checkpoint-60090"
 title_default_values = [-1, -1]
+
+# in case you are processing custom datasets with different names please change the paths
+filename_pattern_train_input = "data/all_users_train_{}.csv".format("_".join(cc_codes))
+filename_pattern_test_input = "data/all_users_test_{}.csv".format("_".join(cc_codes))
+filename_pattern_test_full_input = "data/anon_test_full_{}.csv".format("_".join(cc_codes))
+filename_pattern_train = "data/processed_all_users_train_{}.csv".format("_".join(cc_codes))
+filename_pattern_test = "data/processed_all_users_test_{}.csv".format("_".join(cc_codes))
+filename_pattern_test_full = "data/processed_all_users_test_full_{}.csv".format("_".join(cc_codes))
 
 
 class FeatureExtractor:
 
     def __init__(
-            self,
-            content_types=CONTENT_TYPES,
-            action_types=ACTION_TYPES,
-            insert_model=insert_model,
-            insert_default_values=insert_default_values,
-            change_model=change_model,
-            change_default_values=change_default_values,
-            title_model=title_model,
-            title_default_values=title_default_values,
-            remove_model=remove_model,
-            remove_default_values=remove_default_values,
+        self,
+        content_types=CONTENT_TYPES,
+        action_types=ACTION_TYPES,
+        insert_model=insert_model,
+        insert_default_values=insert_default_values,
+        change_model=change_model,
+        change_default_values=change_default_values,
+        title_model=title_model,
+        title_default_values=title_default_values,
+        remove_model=remove_model,
+        remove_default_values=remove_default_values,
     ):
         self.content_types = content_types
         self.action_types = action_types
@@ -108,22 +70,26 @@ class FeatureExtractor:
         self.title_model = title_model
         self.title_default_values = title_default_values
 
-    def get_features(self, df):
+    def get_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Method that collects custom features for the dataset including parsing actions features and adding MLM features.
+        :param df: pd.DataFrame, dataframe used for feature collection
+        :return: pd.DataFrame, dataframe extended with new features.
+        """
         df = df.reset_index(drop=True)
-        df = self._get_actions_features(df)
         df = self._get_insert_text_features(df)
-        df = self._get_change_text_features(df)
         df = self._get_title_semantics(df)
         df = self._get_remove_text_features(df)
-
+        df = self._get_change_text_features(df)
+        df = self._get_actions_features(df)
         return df
 
     def _get_actions_features(self, df, actions_column="actions"):
         features = []
-        feature_names = [f"{t}_{c}" for t in self.content_types for c in self.action_types]
+        feature_names = [f"{c}_{t}" for t in self.content_types for c in self.action_types]
         for actions in tqdm(df[actions_column]):
             actions = ast.literal_eval(actions)
-            features_tmp = [actions.get(t, {}).get(c, 0) for t in self.content_types for c in self.action_types]
+            features_tmp = [actions.get(t, 0) for t in feature_names]
             features.append(features_tmp)
         features_df = pd.DataFrame(features, columns=feature_names)
         for c in feature_names:
@@ -241,6 +207,16 @@ class FeatureExtractor:
                                          text[0] != text[1]]
                 else:
                     pass
+            if field_name == "texts_insert" or field_name == "texts_removed":
+                texts_to_process = list(set(texts_to_process))
+                texts_length = [len(t) for t in texts_to_process]
+            elif field_name == "texts_change":
+                texts_length = [len(t["text"]) for t in texts_to_process]
+            else:
+                    pass
+            ids = np.argsort(texts_length)[::-1]
+            texts_to_process_new = [texts_to_process[i] for i in ids]
+            texts_to_process = texts_to_process_new
             return texts_to_process
 
     def _get_text_features(self, texts, model_type="insert"):
@@ -272,8 +248,10 @@ class FeatureExtractor:
 
         preds = []
         for i in tqdm(range(0, len(texts), tqdm_batch_size)):
-            preds += clf(texts[i:i + tqdm_batch_size], return_all_scores=True, function_to_apply="none",
-                         **tokenizer_kwargs, batch_size=64)
+            # sorting texts for better performance:
+            texts_tmp = texts[i:i + tqdm_batch_size]
+            preds += clf(texts_tmp, return_all_scores=True, function_to_apply="none",
+                         **tokenizer_kwargs, batch_size=100)
 
         del tokenizer, model
         gc.collect()
@@ -285,25 +263,16 @@ class FeatureExtractor:
 
         return preds_dict
 
-
-filename_pattern_train_input = "data/anon_train_{}.csv".format("_".join(cc_codes))
-filename_pattern_test_input = "data/anon_test_{}.csv".format("_".join(cc_codes))
-filename_pattern_test_full_input = "data/anon_test_full_{}.csv".format("_".join(cc_codes))
-
-filename_pattern_train = "data/processed_anon_train_{}.csv".format("_".join(cc_codes))
-filename_pattern_test = "data/processed_anon_test_{}.csv".format("_".join(cc_codes))
-filename_pattern_test_full = "data/processed_anon_test_full_{}.csv".format("_".join(cc_codes))
-
 feature_extractor = FeatureExtractor()
 
 train_df = pd.read_csv(filename_pattern_train_input)
 train_df = feature_extractor.get_features(train_df)
 train_df.to_csv(filename_pattern_train, index=False)
 
-test_df = pd.read_csv(filename_pattern_test_input)
-test_df = feature_extractor.get_features(test_df)
-test_df.to_csv(filename_pattern_test, index=False)
-
 test_df_full = pd.read_csv(filename_pattern_test_full_input)
 test_df_full = feature_extractor.get_features(test_df_full)
 test_df_full.to_csv(filename_pattern_test_full, index=False)
+
+test_df = pd.read_csv(filename_pattern_test_input)
+test_df = feature_extractor.get_features(test_df)
+test_df.to_csv(filename_pattern_test, index=False)
