@@ -3,56 +3,9 @@ import numpy as np
 from tqdm import tqdm
 
 cc_codes = [
-    "ka",
-    "lv",
-    "ta",
-    # "kk",
-    "ur",
-    "eo",
-    "lt",
-    "sl",
-    "hy",
-    "hr",
-    "sk",
-    "eu",
-    "et",
-    "ms",
-    "az",
-    "da",
-    "bg",
-    "sr",
-    "ro",
-    "el",
-    "th",
-    "bn",
-    # "simple",
-    "no",
-    "hi",
-    "ca",
-    "hu",
-    "ko",
-    "fi",
-    "vi",
-    "uz",
-    "sv",
-    "cs",
-    "he",
-    "id",
-    "tr",
-    "uk",
-    "nl",
-    "pl",
-    "ar",
-    "fa",
-    "it",
-    "zh",
-    # "pt",
-    "ru",
-    "es",
-    "ja",
-    "de",
-    "fr",
-    "en"
+    "ka", "lv", "ta", "ur", "eo", "lt", "sl", "hy", "hr", "sk", "eu", "et", "ms", "az", "da", "bg",
+    "sr", "ro", "el", "th", "bn", "no", "hi", "ca", "hu", "ko", "fi", "vi", "uz", "sv", "cs", "he",
+    "id", "tr", "uk", "nl", "pl", "ar", "fa", "it", "zh", "ru", "es", "ja", "de", "fr", "en"
 ]
 
 
@@ -99,9 +52,9 @@ class Preprocessor:
         return data
 
 
-filename_pattern = "../final_notebooks/data/train/{}_anonymous_text_07-2022.csv"
-filename_pattern_train = "data/anon_train_{}.csv".format("_".join(cc_codes))
-filename_pattern_test = "data/anon_test_{}.csv".format("_".join(cc_codes))
+filename_pattern = "data/all_users_{}_text_07-2022_train.csv"
+filename_pattern_train = "data/all_users_train_{}.csv".format("_".join(cc_codes))
+filename_pattern_test = "data/all_users_test_{}.csv".format("_".join(cc_codes))
 validation_timestamp_split = "2022-07-01"
 feature_factory = Preprocessor()
 
@@ -132,8 +85,8 @@ test_df.to_csv(filename_pattern_test, index=False)
 
 # collect test dataset:
 test_dfs = []
-filename_pattern = "../final_notebooks/data/test/{}_anonymous_text_07-2022_test.csv"
-filename_pattern_test = "data/anon_test_full_{}.csv".format("_".join(cc_codes))
+filename_pattern = "data/all_users_{}_text_07-2022_test.csv"
+filename_pattern_test = "data/all_users_test_full_{}.csv".format("_".join(cc_codes))
 for cc in tqdm(cc_codes):
     test_df = pd.read_csv(filename_pattern.format(cc))
     test_df = feature_factory.filter(test_df)
@@ -141,16 +94,4 @@ for cc in tqdm(cc_codes):
     test_dfs.append(test_df)
 
 test_df_full = pd.concat(test_dfs)
-
-
-def is_anon(user_name):
-    key_1 = len(user_name.split(".")) == 4
-    key_2 = len(user_name.split(":")) == 8
-    if key_1 | key_2:
-        return 1
-    else:
-        return 0
-
-
-test_df_full["is_anon"] = test_df_full.event_user_text_historical.apply(lambda x: is_anon(x))
 test_df_full.to_csv(filename_pattern_test, index=False)

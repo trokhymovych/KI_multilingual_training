@@ -383,7 +383,7 @@ revisions_text_all_sample = revisions_text_all_sample \
         F.col("udf_res.actions")
     )
 # dump data to parquet:
-dump_name = f"{PREFIX}_{LANG}_anonymous_text_07-2022_{MODE}"
+dump_name = f"{PREFIX}_{LANG}_text_07-2022_{MODE}"
 revisions_text_all_sample.write.parquet(dump_name + ".parquet", mode="overwrite")
 
 # dump data to csv:

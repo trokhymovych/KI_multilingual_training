@@ -1,9 +1,9 @@
 # Knowledge Integrity multilingual model training
 
-This repository includes resources to reproduce training procedure
-of Knowledge Integrity multilingual model from data collection to model training. 
+This repository includes resources to reproduce training procedure for the paper
+**Fair multilingual vandalism prevention system for Wikipedia** from data collection to model training. 
 
-The model inference is implemented in 
+The model inference logic is implemented in 
 [Knowledge Integrity repo](https://gitlab.wikimedia.org/repos/research/knowledge_integrity)
 
 
@@ -18,7 +18,7 @@ do
 done
 ```
 The script above collects dataset for each of given languages in the loop. 
-It does not filter anonymous users (-f1) and revision wars (f2). 
+It does not filter anonymous users (-f1) and revision wars (-f2). 
 Also, there is a limit of 300000 records per language.
 
 Data collection of hold-out test:
@@ -28,11 +28,8 @@ do
    python modules/data_collection.py -l $i -m test -f1 0 -f2 1 -n 100000 -uc 1 -p full_test
 done
 ```
-
-All collected data can be found here: .... (to be added)......
-
-
-ToDo: add details of how to collect the data without cluster.
+The sample for collected data can be found here: .....link......
+Full data will be released soon.
 
 #### 2. Initial processing:
 Having the data for each language, the next step is preparing it for training.
@@ -70,6 +67,13 @@ python modules/feature_builder.py
 ```
 Before running the script we should make sure that paths to MLMs and datasets are correct in the script
 
+#### 5. User features extraction for datasets
+Additional user features extraction (is_anonymous, user group):
+```commandline
+python modules/users_features_collection.py
+```
+Module takes as an input the list of files with revisions for which to collect those features. 
+It saves the features to pickle, so they can be used if needed.
 
 
 
