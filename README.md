@@ -75,6 +75,21 @@ Module takes as an input the list of files with revisions for which to collect t
 It saves the features to pickle, so they can be used if needed.
 
 
+#### 6. Training final classification model:
+The training script for the best configuration of model:
+```commandline
+python modules/train_model.py
+```
+In this section we use the prepared data from previous sections. The sample of data used for training 
+can be found later in **Prepared data** section. 
+
+#### 7. Evaluation:
+**Performance metrics:**
+Model analysis based on performance metrics can be found in this notebook: 
+
+**Fairness metrics:**
+Model analysis based on performance metrics can be found in this notebook:
+(Note: in the previous notebook for performance metrics we are also creating input for fairness metrics)
 
 ### Prepared data: 
 All processed data can be also found here: ...... (to be added)......
