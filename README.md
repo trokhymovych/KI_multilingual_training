@@ -44,7 +44,6 @@ setting the balancing key for further evaluation,
 filtering revision wars if it is needed.
 
 It returns three aggregated dataframes: train, test, full-test (independent set)
-All processed data can be also found here: .... (to be added)......
 
 #### 3. MLM tuning:
 Having collected training dataset we proceed with fine-tuning of MLMs. 
@@ -74,6 +73,11 @@ python modules/users_features_collection.py
 ```
 Module takes as an input the list of files with revisions for which to collect those features. 
 It saves the features to pickle, so they can be used if needed.
+
+
+
+### Prepared data: 
+All processed data can be also found here: ...... (to be added)......
 
 
 
