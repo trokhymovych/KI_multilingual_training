@@ -81,15 +81,20 @@ The training script for the best configuration of model:
 python modules/train_model.py
 ```
 In this section we use the prepared data from previous sections. The sample of data used for training 
-can be found later in **Prepared data** section. 
+can be found later in **Prepared data** section. Full data will be published after the paper publication. 
 
 #### 7. Evaluation:
 **Performance metrics:**
 Model analysis based on performance metrics can be found in this notebook: 
 
 **Fairness metrics:**
-Model analysis based on performance metrics can be found in this notebook:
-(Note: in the previous notebook for performance metrics we are also creating input for fairness metrics)
+Model analysis based on performance metrics can be found in this notebook: 
+[performance evaluation](https://github.com/trokhymovych/KI_multilingual_training/blob/main/notebooks/performance_metrics_calculation.ipynb)
+
+(Note: This notebook also creates the input for fairness metrics)
+
+Model analysis based on fairness metrics can be found in this notebook: 
+[fairness evaluation](https://github.com/trokhymovych/KI_multilingual_training/blob/main/notebooks/fairness_metrics_calculation.ipynb)
 
 Also, we are using ORES scores as a reference. The script for their collection is: 
 ```commandline
