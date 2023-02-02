@@ -91,6 +91,12 @@ Model analysis based on performance metrics can be found in this notebook:
 Model analysis based on performance metrics can be found in this notebook:
 (Note: in the previous notebook for performance metrics we are also creating input for fairness metrics)
 
+Also, we are using ORES scores as a reference. The script for their collection is: 
+```commandline
+python modules/ores_scores_collection.py
+```
+Or you can find file with corresponding scores in the prepared data. 
+
 ### Prepared data: 
 All processed data can be also found here: ...... (to be added)......
 
