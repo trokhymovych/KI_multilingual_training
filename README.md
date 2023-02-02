@@ -86,13 +86,11 @@ can be found later in **Prepared data** section. Full data will be published aft
 #### 7. Evaluation:
 **Performance metrics:**
 Model analysis based on performance metrics can be found in this notebook: 
-
-**Fairness metrics:**
-Model analysis based on performance metrics can be found in this notebook: 
 [performance evaluation](https://github.com/trokhymovych/KI_multilingual_training/blob/main/notebooks/performance_metrics_calculation.ipynb)
 
 (Note: This notebook also creates the input for fairness metrics)
 
+**Fairness metrics:**
 Model analysis based on fairness metrics can be found in this notebook: 
 [fairness evaluation](https://github.com/trokhymovych/KI_multilingual_training/blob/main/notebooks/fairness_metrics_calculation.ipynb)
 
