@@ -23,7 +23,7 @@ filename_pattern_test_full = "data/processed_anon_test_full_{}.csv".format("_".j
 train_df = pd.read_csv(filename_pattern_train)
 train_df = train_df[train_df["is_text_train"] == 0]
 
-# adding additional user features:
+# adding additional user features (comment it in case user features are already collected and added):
 with open('data/additional_features.pickle', 'rb') as handle:
     additional_features_dict = pickle.load(handle)
 
