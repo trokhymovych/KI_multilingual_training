@@ -80,8 +80,8 @@ The training script for the best configuration of model:
 ```commandline
 python modules/train_model.py
 ```
-In this section we use the prepared data from previous sections. The sample of data used for training 
-can be found later in **Prepared data** section. Full data will be published after the paper publication. 
+In this section we use the prepared data from previous sections. The sample of data used
+can be found in **Prepared data** section. Full data will be published after the paper publication. 
 
 #### 7. Evaluation:
 **Performance metrics:**
@@ -101,7 +101,9 @@ python modules/ores_scores_collection.py
 Or you can find file with corresponding scores in the prepared data. 
 
 ### Prepared data: 
-All processed data can be also found here: ...... (to be added)......
+Full data will be published after the paper publication.
+
+Data sample of processed data can be also found here: [data sample](https://raw.githubusercontent.com/trokhymovych/KI_multilingual_training/main/data/data_sample.csv)
 
 
 
