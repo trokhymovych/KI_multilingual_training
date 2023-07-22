@@ -1,16 +1,29 @@
 # Knowledge Integrity multilingual model training
 
+<img align="right" src="https://upload.wikimedia.org/wikipedia/commons/1/17/System_design_inference.png" alt="drawing" style="width:300px;"/>
+
 This repository includes resources to reproduce training procedures for the paper
 **Fair multilingual vandalism prevention system for Wikipedia** from data collection to model training. 
 
 - The preprint is already available: [![DOI:10.48550/arXiv.2306.01650](https://zenodo.org/badge/DOI/10.48550/arXiv.2306.01650.svg)](
 https://doi.org/10.48550/arXiv.2306.01650)
-
 - The model inference logic is implemented in 
 [![Knowledge Integrity repo](https://img.shields.io/badge/GitLab-repo-orange)](https://gitlab.wikimedia.org/repos/research/knowledge_integrity)
+- Prepared dataset: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8174336.svg)](https://doi.org/10.5281/zenodo.8174336)
 
+## Experiments reproducing:
 
-### Experiments reproducing:
+### Simplified experiment:
+We publish the [dataset](https://doi.org/10.5281/zenodo.8174336) that can be directly used for final classification model training. 
+Data includes also raw features, that are not directly used in the final classification model like texts.
+
+The training script that uses mentioned collected datasets:
+```commandline
+python modules/train_model_simplified.py --train=data/train_anon_users.csv --test=data/test_anon_user
+s.csv --name=anon_model
+```
+
+### Full experiment: 
 #### 1. Data collection:
 Data collection logic was done using Wikimedia analytical cluster. 
 How to collect data on the cluster:
@@ -101,9 +114,4 @@ Also, we are using ORES scores as a reference. The script for their collection i
 ```commandline
 python modules/ores_scores_collection.py
 ```
-Or you can find the file with corresponding scores in the prepared data. 
-
-### Prepared data: 
-Full data will be published after the paper's publication.
-
-Data sample of processed data can also be found here: [data sample](https://raw.githubusercontent.com/trokhymovych/KI_multilingual_training/main/data/data_sample.csv)
+Or you can find the file with corresponding scores in the prepared data.
