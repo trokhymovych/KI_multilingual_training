@@ -77,6 +77,7 @@ class FeatureExtractor:
         :return: pd.DataFrame, dataframe extended with new features.
         """
         df = df.reset_index(drop=True)
+        df["page_title"] = df["page_title"].fillna("").apply(lambda x: x.replace("_", " "))
         df = self._get_insert_text_features(df)
         df = self._get_title_semantics(df)
         df = self._get_remove_text_features(df)
