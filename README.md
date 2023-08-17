@@ -1,12 +1,12 @@
-# Knowledge Integrity multilingual model training
+# Fair Multilingual Vandalism Detection System for Wikipedia
 
 <img align="right" src="https://upload.wikimedia.org/wikipedia/commons/1/17/System_design_inference.png" alt="drawing" style="width:300px;"/>
 
 This repository includes resources to reproduce training procedures for the paper
-**Fair multilingual vandalism prevention system for Wikipedia** from data collection to model training. 
+**Fair Multilingual Vandalism Detection System for Wikipedia** from data collection to model training. 
 
-- The preprint is already available: [![DOI:10.48550/arXiv.2306.01650](https://zenodo.org/badge/DOI/10.48550/arXiv.2306.01650.svg)](
-https://doi.org/10.48550/arXiv.2306.01650)
+- The full paper already available: [![DOI:10.1145/3580305.3599823](https://zenodo.org/badge/DOI/10.1145/3580305.3599823.svg)](
+https://doi.org/10.1145/3580305.3599823)
 - The model inference logic is implemented in 
 [![Knowledge Integrity repo](https://img.shields.io/badge/GitLab-repo-orange)](https://gitlab.wikimedia.org/repos/research/knowledge_integrity)
 - Prepared dataset: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8174336.svg)](https://doi.org/10.5281/zenodo.8174336)
@@ -115,3 +115,24 @@ Also, we are using ORES scores as a reference. The script for their collection i
 python modules/ores_scores_collection.py
 ```
 Or you can find the file with corresponding scores in the prepared data.
+
+## Citation: 
+**Fair Multilingual Vandalism Detection System for Wikipedia**
+```
+@inproceedings{10.1145/3580305.3599823,
+author = {Trokhymovych, Mykola and Aslam, Muniza and Chou, Ai-Jou and Baeza-Yates, Ricardo and Saez-Trumper, Diego},
+title = {Fair Multilingual Vandalism Detection System for Wikipedia},
+year = {2023},
+isbn = {9798400701030},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3580305.3599823},
+doi = {10.1145/3580305.3599823},
+abstract = {This paper presents a novel design of the system aimed at supporting the Wikipedia community in addressing vandalism on the platform. To achieve this, we collected a massive dataset of 47 languages, and applied advanced filtering and feature engineering techniques, including multilingual masked language modeling to build the training dataset from human-generated data. The performance of the system was evaluated through comparison with the one used in production in Wikipedia, known as ORES. Our research results in a significant increase in the number of languages covered, making Wikipedia patrolling more efficient to a wider range of communities. Furthermore, our model outperforms ORES, ensuring that the results provided are not only more accurate but also less biased against certain groups of contributors.},
+booktitle = {Proceedings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining},
+pages = {4981–4990},
+numpages = {10},
+location = {Long Beach, CA, USA},
+series = {KDD '23}
+}
+```
